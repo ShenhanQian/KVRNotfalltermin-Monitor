@@ -1,3 +1,4 @@
-# Main dependencies for the script
 requests
 ddddocr
+beepy
+wakepy

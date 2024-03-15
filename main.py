@@ -1,7 +1,9 @@
 import json,re,time,random
 import requests
 import ddddocr
-import winsound
+from datetime import datetime
+from beepy import beep
+from wakepy import keep
 
 class KVR():
 
@@ -27,19 +29,10 @@ def get_termins(buro):
         token = None
     # print(token)
 
-    #image OCR
+    # image OCR
     captcha_response = s.get(buro.get_capchaimg_url(), verify=False)
-    # print(captcha_response.text)
-    with open ('verify.png', mode= 'wb') as f:
-        f.write(captcha_response.content)
-    with open('verify.png', mode='rb') as f:
-        img=f.read()
-        
-    ocr=ddddocr.DdddOcr(show_ad=False)    
-    code=ocr.classification(img)
-    
-    #manual input
-    # code=input('input captcha：')
+    ocr = ddddocr.DdddOcr(show_ad=False)    
+    code = ocr.classification(captcha_response.content)
     # print(code)
     
     termin_data = {
@@ -55,41 +48,62 @@ def get_termins(buro):
 
     return appointments
 
+def now():
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
 
 if __name__ == '__main__':    
     
-    print('\033[91m'+'Sound test, please adjust your computer volume'+'\x1b[0m')
-    print('\033[91m'+'When success, output will be in red like this line'+'\x1b[0m')
-    winsound.Beep(523,3000)
-    print('********Start refreshing*********')
-    # search for Termin, gap 10-20 second
-    while True:
-        
-        #try captcha, gap 2-5 second
+    print('Sound test, please adjust your computer volume')
+    try:
+        beep(sound='ping')
+    except Exception as e:
+        print(e)
+    print('Start monitoring...')
+
+    available_last_time = False
+
+    with keep.running() as k:
         while True:
-            try:  
-                appointment_data = get_termins(KVR)
-            except AttributeError:
-                print('Fail to identify the captcha, automatically proceed to another try')
-                #Caution with time setting!
-                time.sleep(random.randint(1,2))
-                continue
-            break
-        
-        availiable=False
-        appointments = appointment_data['LOADBALANCER']['appoints']
-        # print(appointments)
-        
-        for day in appointments:
-            if len(appointments[day]):
-                print('\033[91m'+'Yes! Go get Termin!!'+'\x1b[0m')
-                winsound.Beep(523,3000)
-                #Bool availiable kept for further application
-                availiable=True
+            #try captcha, gap 1-2 second
+            while True:
+                try:  
+                    appointment_data = get_termins(KVR)
+                except AttributeError:
+                    # print('Fail to identify the captcha, automatically proceed to another try')
+                    #Caution with time setting!
+                    time.sleep(random.randint(1,2))
+                    continue
                 break
-        if availiable:
-            break     
-        print('No termin, will continue refreshing')     
-        #Caution with time setting!
-        time.sleep(random.randint(1,2))        
+            
+            available = False
+            appointments = appointment_data['LOADBALANCER']['appoints']
+            # print(appointments)
+            
+            for day in appointments:
+                if len(appointments[day]):
+                    try:
+                        beep(sound='ping')
+                    except Exception as e:
+                        print(e)
+                    print(f'\n{now()} | Termin available on {day}!', end='')
+                    with open('log.txt', 'a') as f:
+                        f.write(f'{now()}\n')
+
+                    #Bool available kept for further application
+                    available = True
+                    break
+            
+            if not available:
+                if available_last_time:
+                    print(f'\n\r{now()} | No Termin available...', end='')
+                else:
+                    print(f'\r{now()} | No Termin available...', end='')
+                
+                available_last_time = False
+            else:
+                available_last_time = True
+
+            #Caution with time setting!
+            time.sleep(random.randint(1,2))        
 
